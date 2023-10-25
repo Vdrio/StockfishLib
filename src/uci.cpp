@@ -40,6 +40,7 @@
 #include "position.h"
 #include "search.h"
 #include "thread.h"
+#include "StockfishExport.h"
 
 namespace Stockfish {
 
@@ -91,8 +92,15 @@ void trace_eval(Position& pos) {
     p.set(pos.fen(), Options["UCI_Chess960"], &states->back(), Threads.main());
 
     Eval::NNUE::verify();
-
-    sync_cout << "\n" << Eval::trace(p) << sync_endl;
+    if (Stockfish::IsLibrary)
+    {
+        std::string info_string = "\n" + Eval::trace(p);
+        NotifyCSharp(info_string.c_str());
+    }
+    else
+    {
+        sync_cout << "\n" << Eval::trace(p) << sync_endl;
+    }
 }
 
 
@@ -118,7 +126,17 @@ void setoption(std::istringstream& is) {
     if (Options.count(name))
         Options[name] = value;
     else
-        sync_cout << "No such option: " << name << sync_endl;
+    {
+        if(Stockfish::IsLibrary)
+        {
+            std::string info_string = "No such option: " + name;
+            NotifyCSharp(info_string.c_str());
+        }
+        else
+        {
+            sync_cout << "No such option: " << name << sync_endl;
+        }
+    }
 }
 
 
@@ -251,6 +269,94 @@ int win_rate_model(Value v, int ply) {
 }  // namespace
 
 
+void UCI::goWrap(Position& pos, std::istringstream& is, StateListPtr& states)
+{
+    go(pos, is, states);
+}
+
+void UCI::positionWrap(Position& pos, std::istringstream& is, StateListPtr& states)
+{
+    position(pos, is, states);
+}
+
+void UCI::setoptionWrap(std::istringstream& is)
+{
+    setoption(is);
+}
+
+void UCI::quitWrap()
+{
+    Threads.stop = true;
+}
+
+void UCI::stopWrap()
+{
+    Threads.stop = true;
+}
+
+void UCI::ponderhitWrap()
+{
+    Threads.main()->ponder = false;
+}
+
+void UCI::uciWrap()
+{
+    if (Stockfish::IsLibrary)
+    {
+        std::ostringstream oss;
+        oss << Options;
+        std::string info_string = "id name " + engine_info(true) + "\n" + oss.str() + "\nuciok";
+        NotifyCSharp(info_string.c_str());
+    }
+}
+
+void UCI::ucinewgameWrap()
+{
+    Search::clear();
+}
+
+void UCI::isreadyWrap()
+{
+    if (Stockfish::IsLibrary)
+    {
+        NotifyCSharp("readyok");
+    }
+}
+
+void UCI::flipWrap(Position& pos)
+{
+    pos.flip();
+}
+
+void UCI::benchWrap(Position& pos, std::istringstream& is, StateListPtr& states)
+{
+    bench(pos, is, states);
+}
+
+void UCI::dWrap(Position& pos)
+{
+    if(Stockfish::IsLibrary)
+    {
+        std::ostringstream oss;
+        oss << pos;
+        std::string info_string = oss.str();
+        NotifyCSharp(info_string.c_str());
+    }
+}
+
+void UCI::evalWrap(Position& pos)
+{
+    trace_eval(pos);
+}
+
+//This can be set before building or at runtime
+bool Stockfish::IsLibrary = false;
+
+void UCI::setIsLibrary(bool value)
+{
+    Stockfish::IsLibrary = value;
+}
+
 // Waits for a command from the stdin, parses it, and then calls the appropriate
 // function. It also intercepts an end-of-file (EOF) indication from the stdin to ensure a
 // graceful exit if the GUI dies unexpectedly. When called with some command-line arguments,
@@ -289,9 +395,10 @@ void UCI::loop(int argc, char* argv[]) {
             Threads.main()->ponder = false;  // Switch to the normal search
 
         else if (token == "uci")
+        {
             sync_cout << "id name " << engine_info(true) << "\n"
                       << Options << "\nuciok" << sync_endl;
-
+        }
         else if (token == "setoption")
             setoption(is);
         else if (token == "go")

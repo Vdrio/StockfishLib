@@ -44,6 +44,7 @@
 #include "timeman.h"
 #include "tt.h"
 #include "uci.h"
+#include "StockfishExport.h"
 
 namespace Stockfish {
 
@@ -171,7 +172,17 @@ uint64_t perft(Position& pos, Depth depth) {
             pos.undo_move(m);
         }
         if (Root)
-            sync_cout << UCI::move(m, pos.is_chess960()) << ": " << cnt << sync_endl;
+        {
+            if (Stockfish::IsLibrary)
+            {
+                std::string info_string = UCI::move(m, pos.is_chess960()) + ": " + std::to_string(cnt);
+                NotifyCSharp(info_string.c_str());
+            }
+            else
+            {
+                sync_cout << UCI::move(m, pos.is_chess960()) << ": " << cnt << sync_endl;
+            }
+        }
     }
     return nodes;
 }
@@ -206,7 +217,15 @@ void MainThread::search() {
     if (Limits.perft)
     {
         nodes = perft<true>(rootPos, Limits.perft);
-        sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
+        if (Stockfish::IsLibrary)
+        {
+            std::string info_string = "\nNodes searched: "+ nodes + '\n';
+            NotifyCSharp(info_string.c_str());
+        }
+        else
+        {
+            sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
+        }
         return;
     }
 
@@ -219,8 +238,16 @@ void MainThread::search() {
     if (rootMoves.empty())
     {
         rootMoves.emplace_back(MOVE_NONE);
-        sync_cout << "info depth 0 score "
+        if (Stockfish::IsLibrary)
+        {
+            std::string info_string = "info depth 0 score " + UCI::value(rootPos.checkers() ? -VALUE_MATE : VALUE_DRAW);;
+            NotifyCSharp(info_string.c_str());
+        }
+        else
+        {
+            sync_cout << "info depth 0 score "
                   << UCI::value(rootPos.checkers() ? -VALUE_MATE : VALUE_DRAW) << sync_endl;
+        }
     }
     else
     {
@@ -262,14 +289,41 @@ void MainThread::search() {
 
     // Send again PV info if we have a new best thread
     if (bestThread != this)
-        sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth) << sync_endl;
+    {
+        if (Stockfish::IsLibrary)
+        {
+            std::string notBestThread = UCI::pv(bestThread->rootPos, bestThread->completedDepth);
+            NotifyCSharp(notBestThread.c_str());
+        }
+        else
+        {
+            sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth) << sync_endl;
+        }
+    }
 
-    sync_cout << "bestmove " << UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+    if (Stockfish::IsLibrary)
+    {
+        std::string info_string = "bestmove " + UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+        NotifyCSharp(info_string.c_str());
+    }
+    else
+    {
+        sync_cout << "bestmove " << UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+    }
 
     if (bestThread->rootMoves[0].pv.size() > 1
         || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
-        std::cout << " ponder " << UCI::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
-
+    {
+        if (Stockfish::IsLibrary)
+        {
+            std::string infoPonder = " ponder " + UCI::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
+            NotifyCSharp(infoPonder.c_str());
+        }
+        else
+        {
+            std::cout << " ponder " << UCI::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
+        }
+    }
     std::cout << sync_endl;
 }
 
@@ -403,7 +457,17 @@ void Thread::search() {
                 // the UI) before a re-search.
                 if (mainThread && multiPV == 1 && (bestValue <= alpha || bestValue >= beta)
                     && Time.elapsed() > 3000)
-                    sync_cout << UCI::pv(rootPos, rootDepth) << sync_endl;
+                {
+                    if (Stockfish::IsLibrary)
+                    {       
+                        std::string infoPV = UCI::pv(rootPos, rootDepth);
+                        NotifyCSharp(infoPV.c_str());
+                    }
+                    else
+                    {
+                        sync_cout << UCI::pv(rootPos, rootDepth) << sync_endl;
+                    }
+                }
 
                 // In case of failing low/high increase aspiration window and
                 // re-search, otherwise exit the loop.
@@ -433,7 +497,17 @@ void Thread::search() {
             std::stable_sort(rootMoves.begin() + pvFirst, rootMoves.begin() + pvIdx + 1);
 
             if (mainThread && (Threads.stop || pvIdx + 1 == multiPV || Time.elapsed() > 3000))
-                sync_cout << UCI::pv(rootPos, rootDepth) << sync_endl;
+            {
+                if (Stockfish::IsLibrary)
+                {  
+                    std::string infoPV = UCI::pv(rootPos, rootDepth);
+                    NotifyCSharp(infoPV.c_str());
+                }
+                else
+                {
+                    sync_cout << UCI::pv(rootPos, rootDepth) << sync_endl;
+                }
+            }
         }
 
         if (!Threads.stop)
@@ -938,9 +1012,21 @@ moves_loop:  // When in check, search starts here
         ss->moveCount = ++moveCount;
 
         if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000)
-            sync_cout << "info depth " << depth << " currmove "
+        {
+            if (Stockfish::IsLibrary)
+            {  
+                std::string info_string = "info depth " + std::to_string(depth)
+                    + " currmove " + UCI::move(move, pos.is_chess960())
+                    + " currmovenumber " + std::to_string(moveCount + thisThread->pvIdx);
+                NotifyCSharp(info_string.c_str());
+            }
+            else
+            {
+                sync_cout << "info depth " << depth << " currmove "
                       << UCI::move(move, pos.is_chess960()) << " currmovenumber "
                       << moveCount + thisThread->pvIdx << sync_endl;
+            }
+        }
         if (PvNode)
             (ss + 1)->pv = nullptr;
 

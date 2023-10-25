@@ -23,8 +23,11 @@
 #include <iosfwd>
 #include <map>
 #include <string>
+#include <iostream>
+#include <sstream>
 
 #include "types.h"
+#include "position.h"
 
 namespace Stockfish {
 
@@ -77,6 +80,20 @@ class Option {
 };
 
 void        init(OptionsMap&);
+void        goWrap(Position &pos, std::istringstream &is, StateListPtr &states);
+void        positionWrap(Position &pos, std::istringstream &is, StateListPtr &states);
+void        setoptionWrap(std::istringstream &is);
+void        quitWrap();
+void        stopWrap();
+void        ponderhitWrap();
+void        uciWrap();
+void        ucinewgameWrap();
+void        isreadyWrap();
+void        flipWrap(Position &pos);
+void        benchWrap(Position &pos, std::istringstream &is, StateListPtr &states);
+void        dWrap(Position &pos);
+void        evalWrap(Position &pos);
+void        setIsLibrary(bool value);
 void        loop(int argc, char* argv[]);
 int         to_cp(Value v);
 std::string value(Value v);
@@ -89,6 +106,7 @@ Move        to_move(const Position& pos, std::string& str);
 }  // namespace UCI
 
 extern UCI::OptionsMap Options;
+extern bool IsLibrary;
 
 }  // namespace Stockfish
 
